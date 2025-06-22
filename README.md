@@ -1,0 +1,1 @@
+ThorVG Partial Rendering Test
