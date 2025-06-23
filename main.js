@@ -1,31 +1,83 @@
 var myApp;
 
-//initialization
+//initialize
 (function () {
-	window.onload = initialize();
+	//window.onload = initialize;
 
 	var script = document.createElement('script');
 	script.type = 'text/javascript';
-	script.src = 'test-app.js';
+	script.src = 'thorvg-wasm.js';
 	document.head.appendChild(script);
-
 	script.onload = _ => {
 		Module.onRuntimeInitialized = _ => {
 			myApp = new MyApp();
+			myApp.ready();
 		};
 	};
+
+	document.addEventListener("DOMContentLoaded", function() {
+		const toggle = document.getElementById("toggle-partial");
+		toggle.addEventListener("change", function() {
+			myApp.partial(toggle.checked);
+		});
+	});
 })();
 
 //for playing animations
 function animLoop() {
 	if (!myApp) return;
 	myApp.render();
-	refreshProgressValue()
 	window.requestAnimationFrame(animLoop);
 }
 
+function onStatsMode() {
+	// Create and inject script element for stats.js
+	const statsScript = document.createElement('script');
+	statsScript.src = 'https://mrdoob.github.io/stats.js/build/stats.min.js';
+	statsScript.onload = () => {
+		// Initialize FPS panel
+		const statsFPS = new Stats();
+		statsFPS.showPanel(0);
+		statsFPS.dom.classList.add("stats");
+		statsFPS.dom.style.cssText = "position:fixed;top:0;left:0;cursor:pointer;opacity:0.9;z-index:10000";
+		document.body.appendChild(statsFPS.dom);
+
+		// Initialize MS panel
+		const statsMS = new Stats();
+		statsMS.showPanel(1);
+		statsMS.dom.classList.add("stats");
+		statsMS.dom.style.cssText = "position:fixed;top:0;left:80px;cursor:pointer;opacity:0.9;z-index:10000";
+		document.body.appendChild(statsMS.dom);
+
+		// Initialize MB panel if supported
+		let statsMB;
+		if (self.performance && self.performance.memory) {
+			statsMB = new Stats();
+			statsMB.showPanel(2);
+			statsMB.dom.classList.add("stats");
+			statsMB.dom.style.cssText = "position:fixed;top:0;left:160px;cursor:pointer;opacity:0.9;z-index:10000";
+			document.body.appendChild(statsMB.dom);
+		}
+
+		// Start animation loop
+		function animate() {
+			statsFPS.begin();
+			statsMS.begin();
+			if (statsMB) statsMB.begin();
+
+			statsFPS.end();
+			statsMS.end();
+			if (statsMB) statsMB.end();
+
+			requestAnimationFrame(animate);
+		}
+
+		requestAnimationFrame(animate);
+	};
+	document.head.appendChild(statsScript);
+}
+
 class MyApp {
-	curRead = null;
 	launched = false;
 
 	flush() {
@@ -46,45 +98,36 @@ class MyApp {
 
 	loadData(data, filename) {
 		var ext = filename.split('.').pop().toLowerCase();
-		if (ext == "json") ext = "lottie";
-		this.tvg.load(new Int8Array(data), ext, this.canvas.width, this.canvas.height);
-		this.filename = filename;
+		this.tvg.load(new Uint8Array(data), "jpg", this.canvas.width, this.canvas.height);
 		this.render();
-		if (!launched) {
+		if (!this.launched) {
 			window.requestAnimationFrame(animLoop);
-			launched = true;
+			this.launched = true;
 		}		
 	}
 
-	loadUrl(url) {
+	partial(on) {
+		this.tvg.partial(on);
+	}
+
+	ready() {
+		let url = "https://raw.githubusercontent.com/hermet/partial-test/main/particle.jpg";
 		let request = new XMLHttpRequest();
 		request.open('GET', url, true);
 		request.responseType = 'arraybuffer';
-		request.onloadend = _ => {
-			if (request.status !== 200) {
-				alert("Unable to load an image from url " + url);
-				return;
-			}
+
+		request.onloadend = () => {
+			if (request.status !== 200) return;
 			let name = url.split('/').pop();
 			this.loadData(request.response, name);
-			showImageCanvas();
 		};
+		request.send();
+
+		onStatsMode();
 	}
 
 	constructor() {
 		this.tvg = new Module.TvgTestApp();
-		this.canvas = document.getElementById("image-canvas");
+		this.canvas = document.getElementById("content-area");
 	}
-}
-
-function initialize() {
-
-}
-
-//main image section
-function showImageCanvas() {
-	var canvas = document.getElementById("image-canvas");
-	var placeholder = document.getElementById("image-placeholder");
-	canvas.classList.remove("hidden");
-	placeholder.classList.add("hidden");
 }
